@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 import os
 import pandas as pd
@@ -24,14 +25,14 @@ class auto_api_sp:
         try:
             api1 = GenSP(self.db, self.brand, self.market)
             api2 = ToolsSP(self.db, self.brand, self.market)
-            campaign_info = api2.list_campaigns_api(campaignId)
+            campaign_info = asyncio.run(api2.list_campaigns_api(campaignId))
             if campaign_info["campaigns"] is not None:
                 for item in campaign_info["campaigns"]:
                     campaignId = item['campaignId']
                     name = item['name']
                     state = item['state']
                     bid1 = item['budget']['budget']
-                    e = api1.update_camapign_v0(str(campaignId), name, float(bid1), float(bid), state, self.user)
+                    e = asyncio.run(api1.update_camapign_v0(str(campaignId), name, float(bid1), float(bid), state, self.user))
                     if e:
                         return 400,e
                     else:
@@ -46,7 +47,7 @@ class auto_api_sp:
         try:
             api1 = GenSP(self.db, self.brand, self.market)
             api2 = ToolsSP(self.db, self.brand, self.market)
-            campaign_info = api2.list_campaigns_api(campaignId)
+            campaign_info = asyncio.run(api2.list_campaigns_api(campaignId))
             if campaign_info["campaigns"] is not None:
                 for item in campaign_info["campaigns"]:
                     placement_bidding = item['dynamicBidding']['placementBidding']
@@ -63,7 +64,7 @@ class auto_api_sp:
                             print(f'Placement: {placement}, Percentage: {percentage}')
                             bid1 = percentage
                             if bid1 is not None:
-                                e = api1.update_campaign_placement(str(campaignId), bid1, float(bid), placement, self.user)
+                                e = asyncio.run(api1.update_campaign_placement(str(campaignId), bid1, float(bid), placement, self.user))
                                 if e:
                                     return 400, e
                                 else:
@@ -78,12 +79,12 @@ class auto_api_sp:
         try:
             api = GenSP(self.db, self.brand, self.market)
             api1 = ToolsSP(self.db, self.brand, self.market)
-            spkeyword_info = api1.get_spkeyword_api_by_keywordId(keywordId)
+            spkeyword_info = asyncio.run(api1.get_spkeyword_api_by_keywordId(keywordId))
             if spkeyword_info["keywords"] is not None:
                 for spkeyword in spkeyword_info["keywords"]:
                     bid1 = spkeyword.get('bid')
                     state = spkeyword['state']
-                    e = api.update_keyword_toadGroup(str(keywordId), bid1, float(bid), state, self.user)
+                    e = asyncio.run(api.update_keyword_toadGroup(str(keywordId), bid1, float(bid), state, self.user))
                     if e:
                         return 400, e
                     else:
@@ -98,7 +99,7 @@ class auto_api_sp:
         try:
             api = GenSP(self.db, self.brand, self.market)
             api1 = ToolsSP(self.db, self.brand, self.market)
-            spkeyword_info = api1.get_spkeyword_api_by_keywordId(keywordId)
+            spkeyword_info = asyncio.run(api1.get_spkeyword_api_by_keywordId(keywordId))
             keyword_bid_mapping = {k: v for k, v in zip(keywordId, bid)}
             if spkeyword_info["keywords"] is not None:
                 merged_info = []
@@ -111,7 +112,7 @@ class auto_api_sp:
                             "bid": info.get('bid', None),
                             "bid_new": float(keyword_bid_mapping[keyword_id])  # 从 mapping 中获取 bid_old
                         })
-                api.update_keyword_toadGroup_batch(merged_info, self.user)
+                asyncio.run(api.update_keyword_toadGroup_batch(merged_info, self.user))
                 return 200,None
             else:
                 return 404,"Keyword not found"  # Keyword not found
@@ -123,13 +124,13 @@ class auto_api_sp:
         try:
             api1 = GenSP(self.db, self.brand, self.market)
             api2 = ToolsSP(self.db, self.brand, self.market)
-            automatic_targeting_info = api2.list_adGroup_TargetingClause_by_targetId(keywordId)
+            automatic_targeting_info = asyncio.run(api2.list_adGroup_TargetingClause_by_targetId(keywordId))
             if automatic_targeting_info["targetingClauses"] is not None:
                 for item in automatic_targeting_info["targetingClauses"]:
                     targetId = item['targetId']
                     state = item['state']
                     bid1 = item.get('bid')
-                    e = api1.update_adGroup_TargetingClause(str(targetId), float(bid), state, self.user)
+                    e = asyncio.run(api1.update_adGroup_TargetingClause(str(targetId), float(bid), state, self.user))
                     if e:
                         return 400, e
                     else:
@@ -144,7 +145,7 @@ class auto_api_sp:
         try:
             api1 = GenSP(self.db, self.brand, self.market)
             api2 = ToolsSP(self.db, self.brand, self.market)
-            automatic_targeting_info = api2.list_adGroup_TargetingClause_by_targetId(keywordId)
+            automatic_targeting_info = asyncio.run(api2.list_adGroup_TargetingClause_by_targetId(keywordId))
             keyword_bid_mapping = {k: v for k, v in zip(keywordId, bid)}
             if automatic_targeting_info["targetingClauses"] is not None:
                 merged_info = []
@@ -157,7 +158,7 @@ class auto_api_sp:
                             "bid": info.get('bid', None),
                             "bid_new": float(keyword_bid_mapping[keyword_id]) # 从 mapping 中获取 bid_old
                         })
-                api1.update_adGroup_TargetingClause_batch(merged_info, self.user)
+                asyncio.run(api1.update_adGroup_TargetingClause_batch(merged_info, self.user))
                 return 200,None
             else:
                 return 404,"Keyword not found"  # Keyword not found
@@ -169,13 +170,13 @@ class auto_api_sp:
         try:
             api1 = GenSP(self.db, self.brand, self.market)
             api2 = ToolsSP(self.db, self.brand, self.market)
-            automatic_targeting_info = api2.list_adGroup_TargetingClause_by_targetId(keywordId)
+            automatic_targeting_info = asyncio.run(api2.list_adGroup_TargetingClause_by_targetId(keywordId))
             if automatic_targeting_info["targetingClauses"] is not None:
                 for automatic_targeting in automatic_targeting_info["targetingClauses"]:
                     targetId = automatic_targeting['targetId']
                     state = automatic_targeting['state']
                     bid1 = automatic_targeting.get('bid')
-                    e = api1.update_adGroup_TargetingClause(str(targetId), float(bid), state, self.user)
+                    e = asyncio.run(api1.update_adGroup_TargetingClause(str(targetId), float(bid), state, self.user))
                     if e:
                         return 400, e
                     else:
@@ -190,13 +191,13 @@ class auto_api_sp:
         try:
             api1 = GenSP(self.db, self.brand, self.market)
             api2 = ToolsSP(self.db, self.brand, self.market)
-            campaign_info = api1.list_campaigns_api(campaignId)
+            campaign_info = asyncio.run(api1.list_campaigns_api(campaignId))
             if campaign_info["campaigns"] is not None:
                 for item in campaign_info["campaigns"]:
                     campaignId = item['campaignId']
                     name = item['name']
                     state = item['state']
-                    e = api1.update_camapign_status(str(campaignId), name, state, status, self.user)
+                    e = asyncio.run(api1.update_camapign_status(str(campaignId), name, state, status, self.user))
                     if e:
                         return 400, e
                     else:
@@ -210,7 +211,7 @@ class auto_api_sp:
     def auto_sku_status(self, adId, status):
         try:
             api = GenSP(self.db, self.brand, self.market)
-            e = api.update_product(str(adId), status, self.user)
+            e = asyncio.run(api.update_product(str(adId), status, self.user))
             if e:
                 return 400, e
             else:
@@ -222,7 +223,7 @@ class auto_api_sp:
     def auto_keyword_status(self, keywordId, status):
         try:
             api = GenSP(self.db, self.brand, self.market)
-            e = api.update_keyword_toadGroup(str(keywordId), None, bid_new=None, state=status, user=self.user)
+            e = asyncio.run(api.update_keyword_toadGroup(str(keywordId), None, bid_new=None, state=status, user=self.user))
             if e:
                 return 400, e
             else:
@@ -241,7 +242,7 @@ class auto_api_sp:
                             "bid": None,
                             "bid_new": None  # 从 mapping 中获取 bid_old
                         })
-            api.update_keyword_toadGroup_batch(merged_info, self.user)
+            asyncio.run(api.update_keyword_toadGroup_batch(merged_info, self.user))
             return 200,None
         except Exception as e:
             print(e)
@@ -258,7 +259,7 @@ class auto_api_sp:
                             "bid": None,
                             "bid_new": None  # 从 mapping 中获取 bid_old
                         })
-            api.update_adGroup_TargetingClause_batch(merged_info, self.user)
+            asyncio.run(api.update_adGroup_TargetingClause_batch(merged_info, self.user))
             return 200,None
         except Exception as e:
             print(e)
@@ -276,7 +277,7 @@ class auto_api_sp:
     def auto_targeting_status(self, keywordId, status):
         try:
             api1 = GenSP(self.db, self.brand, self.market)
-            e = api1.update_adGroup_TargetingClause(str(keywordId), bid=None, state=status, user=self.user)
+            e = asyncio.run(api1.update_adGroup_TargetingClause(str(keywordId), bid=None, state=status, user=self.user))
             if e:
                 return 400, e
             else:
@@ -297,7 +298,7 @@ class auto_api_sp:
     def delete_negative_target(self, keywordId):
         try:
             api1 = GenSP(self.db, self.brand, self.market)
-            api1.delete_adGroup_Negative_Targeting(keywordId, user=self.user)
+            asyncio.run(api1.delete_adGroup_Negative_Targeting(keywordId, user=self.user))
             return 200,None
         except Exception as e:
             print(e)
@@ -306,7 +307,7 @@ class auto_api_sp:
     def delete_negative_keyword(self, keywordId):
         try:
             api1 = GenSP(self.db, self.brand, self.market)
-            api1.delete_adGroup_negative_keyword(keywordId, user=self.user)
+            asyncio.run(api1.delete_adGroup_negative_keyword(keywordId, user=self.user))
             return 200,None
         except Exception as e:
             print(e)
@@ -316,7 +317,7 @@ class auto_api_sp:
         try:
             apitool1 = ToolsSP(self.db, self.brand, self.market)
             api2 = GenSP(self.db, self.brand, self.market)
-            brand_info = apitool1.list_category_refinements(keywordId)
+            brand_info = asyncio.run(apitool1.list_category_refinements(keywordId))
             # 检查是否存在名为"LAPASA"的品牌
             target_brand_name = self.brand
             target_brand_id = None
@@ -324,9 +325,9 @@ class auto_api_sp:
             for brand in brand_info['brands']:
                 if brand['name'] == target_brand_name:
                     target_brand_id = brand['id']
-                    targetId,e = api2.create_adGroup_Targeting2(campaignId, adGroupId,
+                    targetId,e = asyncio.run(api2.create_adGroup_Targeting2(campaignId, adGroupId,
                                                               float(bid),
-                                                              keywordId, target_brand_id, self.user)
+                                                              keywordId, target_brand_id, self.user))
                     if e:
                         return 400, e
                     else:
@@ -338,8 +339,8 @@ class auto_api_sp:
     def create_product_target_asin(self, asin, bid, campaignId, adGroupId):
         try:
             api2 = GenSP(self.db, self.brand, self.market)
-            targetId,e = api2.create_adGroup_Targeting1(campaignId, adGroupId, asin, float(bid),
-                                           state='ENABLED', type='ASIN_SAME_AS', user=self.user)
+            targetId,e = asyncio.run(api2.create_adGroup_Targeting1(campaignId, adGroupId, asin, float(bid),
+                                           state='ENABLED', type='ASIN_SAME_AS', user=self.user))
             if e:
                 return 400, e
             else:
@@ -351,8 +352,8 @@ class auto_api_sp:
     def create_product_target_asin_expended(self, asin, bid, campaignId, adGroupId):
         try:
             api2 = GenSP(self.db, self.brand, self.market)
-            targetId,e = api2.create_adGroup_Targeting1(campaignId, adGroupId, asin, float(bid),
-                                           state='ENABLED', type='ASIN_EXPANDED_FROM', user=self.user)
+            targetId,e = asyncio.run(api2.create_adGroup_Targeting1(campaignId, adGroupId, asin, float(bid),
+                                           state='ENABLED', type='ASIN_EXPANDED_FROM', user=self.user))
             if e:
                 return 400, e
             else:
@@ -364,8 +365,8 @@ class auto_api_sp:
     def create_keyword(self, keywordtext, bid, campaignId, adGroupId,matchType):
         try:
             api2 = GenSP(self.db, self.brand, self.market)
-            targetId,e = api2.add_keyword_toadGroup_v0(campaignId, adGroupId, keywordtext, matchType,
-                                           'ENABLED', float(bid), self.user)
+            targetId,e = asyncio.run(api2.add_keyword_toadGroup_v0(campaignId, adGroupId, keywordtext, matchType,
+                                           'ENABLED', float(bid), self.user))
             if e:
                 return 400, e
             else:
@@ -378,10 +379,10 @@ class auto_api_sp:
         try:
             api1 = GenSP(self.db, self.brand, self.market)
             if len(searchTerm) == 10 and searchTerm.startswith('B0'):
-                targetId,e = api1.create_adGroup_Negative_Targeting_by_asin(str(campaignId), str(adGroupId), searchTerm.upper(), user=self.user)
+                targetId,e = asyncio.run(api1.create_adGroup_Negative_Targeting_by_asin(str(campaignId), str(adGroupId), searchTerm.upper(), user=self.user))
             else:
-                targetId,e = api1.add_adGroup_negative_keyword_v0(str(campaignId), str(adGroupId), searchTerm,
-                                                         matchType=matchType, state="ENABLED", user=self.user)
+                targetId,e = asyncio.run(api1.add_adGroup_negative_keyword_v0(str(campaignId), str(adGroupId), searchTerm,
+                                                         matchType=matchType, state="ENABLED", user=self.user))
             if e:
                 return 400, e
             else:
@@ -414,9 +415,9 @@ class auto_api_sp:
             print("-------------")
             print(merged_keyword_info)
             if len(merged_asin_info) > 0:
-                api1.create_adGroup_Negative_Targeting_by_asin_batch(merged_asin_info, user=self.user)
+                asyncio.run(api1.create_adGroup_Negative_Targeting_by_asin_batch(merged_asin_info, user=self.user))
             if len(merged_keyword_info) > 0:
-                api1.add_adGroup_negative_keyword_batch(merged_keyword_info, user=self.user)
+                asyncio.run(api1.add_adGroup_negative_keyword_batch(merged_keyword_info, user=self.user))
             return 200,None
         except Exception as e:
             print(e)
@@ -425,12 +426,12 @@ class auto_api_sp:
     def auto_campaign_name(self, campaignId, new_name):
         try:
             api1 = GenSP(self.db, self.brand, self.market)
-            campaign_info = api1.list_campaigns_api(campaignId)
+            campaign_info = asyncio.run(api1.list_campaigns_api(campaignId))
             if campaign_info["campaigns"] is not None:
                 for item in campaign_info["campaigns"]:
                     campaignId = item['campaignId']
                     name = item['name']
-                    e = api1.update_camapign_name(str(campaignId), name, new_name, self.user)
+                    e = asyncio.run(api1.update_camapign_name(str(campaignId), name, new_name, self.user))
                     if e:
                         return 400, e
                     else:
