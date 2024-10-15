@@ -1,16 +1,14 @@
 from celery import Celery
-from main import app
 
-def make_celery(app):
-    celery = Celery(
-        app.import_name,
-        backend=app.config['CELERY_RESULT_BACKEND'],
-        broker=app.config['CELERY_BROKER_URL']
-    )
-    celery.conf.update(app.config)
-    return celery
+# 创建 Celery 应用实例
+celery = Celery('tasks', broker='redis://192.168.2.165:6379')
 
-celery = make_celery(app)
+# 配置 Celery
+celery.conf.update(
+    result_backend='redis://192.168.2.165:6379'
+)
+
+
 
 
 

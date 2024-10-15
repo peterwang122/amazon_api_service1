@@ -15,12 +15,6 @@ from configuration.path import get_config_path
 
 app = Flask(__name__)
 
-# 配置 Celery
-app.config.update(
-    CELERY_BROKER_URL='redis://192.168.5.165:6379/0',  # 替换为你的 Redis 或 RabbitMQ 配置
-    CELERY_RESULT_BACKEND='redis://192.168.5.165:6379/0'
-)
-
 def run_flower():
     # 使用 subprocess 启动 Flower
     subprocess.Popen(['celery', '-A', 'main', 'flower'])
