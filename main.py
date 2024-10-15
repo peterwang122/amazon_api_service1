@@ -3,12 +3,11 @@ import os
 import subprocess
 import threading
 from datetime import datetime
-from celery import Celery
 from flask import Flask, request, jsonify, g
-import flower
 from logs.logger import logger
 import hashlib
 import time
+from base.tasks import update_task
 from models.update_api import update_api
 # from ai.backend.util.db.auto_process.provide_api.util.create_api import create_api
 # from ai.backend.util.db.auto_process.provide_api.util.automatically_api import automatically_api
@@ -21,22 +20,6 @@ app.config.update(
     CELERY_BROKER_URL='redis://192.168.5.165:6379/0',  # 替换为你的 Redis 或 RabbitMQ 配置
     CELERY_RESULT_BACKEND='redis://192.168.5.165:6379/0'
 )
-
-def make_celery(app):
-    celery = Celery(
-        app.import_name,
-        backend=app.config['CELERY_RESULT_BACKEND'],
-        broker=app.config['CELERY_BROKER_URL']
-    )
-    celery.conf.update(app.config)
-    return celery
-
-celery = make_celery(app)
-
-@celery.task
-def update_task(data):
-    code,e = update_api(data)
-    return code,e
 
 def run_flower():
     # 使用 subprocess 启动 Flower

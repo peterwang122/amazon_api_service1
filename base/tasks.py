@@ -1,5 +1,5 @@
 # tasks.py
-from main import celery  # 导入 Celery 实例
+from base.celery_app import celery  # 导入 Celery 实例
 from models.update_api import update_api
 
 

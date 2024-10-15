@@ -1,4 +1,5 @@
 from celery import Celery
+from main import app
 
 def make_celery(app):
     celery = Celery(
@@ -8,6 +9,8 @@ def make_celery(app):
     )
     celery.conf.update(app.config)
     return celery
+
+celery = make_celery(app)
 
 
 
