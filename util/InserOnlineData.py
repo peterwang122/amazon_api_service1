@@ -110,7 +110,10 @@ class ProcessShowData():
         return cls.post_data(data, str(OuthType.lower())+"_token")
         pass
 
-
+    @classmethod
+    def user_account_info(cls, post_data):
+        """获取用户列表"""
+        return cls.post_data(post_data, "user_account_info")
 # if __name__ == "__main__":
     #     # 要发送的JSON数据
     #     add_data = {

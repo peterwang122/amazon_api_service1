@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime
 import aiomysql
+from tenacity import retry, stop_after_attempt, wait_fixed
 import pymysql
 from logs.logger import logger
 from configuration.path import get_config_path
@@ -64,6 +65,7 @@ class BaseDb:
         # 返回默认信息
         return brand_info.get('default', {})
 
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(5))
     async def connect(self, db_info):
         try:
             conn = await aiomysql.connect(**db_info)  # 异步连接数据库
@@ -71,14 +73,15 @@ class BaseDb:
             return conn
         except Exception as error:
             print("Error while connecting to amazon_mysql:", error)
-            return None
+            raise
 
-    def connect_close(self):
-        try:
-            self.conn.close()
-        except Exception as error:
-            print("Error while connecting to amazon_mysql:", error)
-            return None
+    async def close_connection(self):
+        if self.conn:
+            try:
+                self.conn.close()
+                print("Database connection closed.")
+            except Exception as e:
+                print(f"Error occurred while closing connection: {e}")
 
     def get_timestamp(self):
         # 获取当前时间

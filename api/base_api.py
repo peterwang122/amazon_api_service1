@@ -4,6 +4,9 @@ import aiohttp
 import json
 from functools import wraps
 from time import sleep
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import random
 from collections.abc import Iterable
 from ad_api.base import Marketplaces
@@ -22,7 +25,7 @@ class BaseApi:
         self.db = db
         self.executor = ThreadPoolExecutor()
         self.credentials, self.access_token = self.load_credentials()
-        self.attempts_time = 3
+        self.attempts_time = 5
         self.proxy_manager = ProxyManager()
 
     def load_credentials(self):
@@ -34,9 +37,36 @@ class BaseApi:
         logger.info(message)
 
     async def wait_time(self):
-        wait_time = random.randint(5, 10)
+        wait_time = random.randint(10, 20)
         self.log(f"Waiting for {wait_time} seconds before retrying...")
         await asyncio.sleep(wait_time)
+
+    async def send_error_email(self, error_message, method_name):
+        """发送错误邮件"""
+        sender_email = "wanghequan@deepbi.com"  # 你的飞书邮箱地址
+        receiver_emails = ["wanghequan@deepbi.com", "lipengcheng@deepbi.com"]  # 收件人的邮箱地址列表
+        password = "tpa15CVg4pfBL1yK"  # 你的飞书邮箱授权码
+        smtp_server = "smtp.feishu.cn"  # 飞书的 SMTP 服务器地址
+        smtp_port = 587  # 使用 TLS 加密（端口 587）
+
+        subject = f"Error in {method_name} API Call"
+        body = f"An error occurred in method {method_name}: {error_message}"
+
+        msg = MIMEMultipart()
+        msg["From"] = sender_email
+        msg["To"] = ", ".join(receiver_emails)  # 多个收件人，用逗号分隔
+        msg["Subject"] = subject
+
+        msg.attach(MIMEText(body, "plain"))
+
+        try:
+            with smtplib.SMTP(smtp_server, smtp_port) as server:
+                server.starttls()  # 启用 TLS 加密
+                server.login(sender_email, password)
+                server.sendmail(sender_email, receiver_emails, msg.as_string())  # 发送邮件到多个收件人
+                print(f"Error email sent successfully to {', '.join(receiver_emails)}")
+        except Exception as email_error:
+            print(f"Failed to send error email: {str(email_error)}")
 
     async def make_request(self, api_class, method_name, *args, **kwargs):
         attempts = 0
@@ -74,10 +104,18 @@ class BaseApi:
                     attempts += 1
 
             except Exception as e:
-                self.log(f"Exception occurred in {method_name}: {e}")
-                await self.wait_time()
-                res = e
-                attempts += 1
+                if attempts == self.attempts_time - 1:
+                    self.log(f"Exception occurred in {method_name}: {str(e)}")
+                    # 如果是最后一次尝试，直接抛出异常
+                    await self.send_error_email(str(e), method_name)
+                    raise e
+                else:
+                    self.log(f"Exception occurred in {method_name}: {str(e)}")
+                    i = 0
+                    while i < attempts + 1:
+                        await self.wait_time()
+                        i += 1
+                    attempts += 1
         return res
 
     def to_iterable(self, obj):
@@ -85,3 +123,6 @@ class BaseApi:
             return obj  # 如果是可迭代的（非字符串或字节），返回原对象
         else:
             return [obj]
+
+if __name__ == "__main__":
+    asyncio.run( BaseApi('amazon_ads','LAPASA','US').send_error_email("123","321"))

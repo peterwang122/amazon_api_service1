@@ -271,7 +271,7 @@ class GenSP(ToolsSP):
         success_indices = {item['index']: item['negativeKeywordId'] for item in res['negativeKeywords']['success']}
 
         updates = []
-
+        res = []
         for idx, item in enumerate(info):
             # 检查当前的索引是否在成功的索引中
             if idx in success_indices:
@@ -286,7 +286,7 @@ class GenSP(ToolsSP):
                 'adGroupName': None,
                 'adGroupId': item['adGroupId'],
                 'campaignId': item['campaignId'],
-                'campaignName': None,
+                'campaignName': item['campaignName'],
                 'matchType': item['matchType'],
                 'keyword_state': "ENABLED",
                 'keywordText': item['keywordText'],
@@ -294,10 +294,20 @@ class GenSP(ToolsSP):
                 'update_time': datetime.now(),
                 'campaignNegativeKeywordId': target_id,
                 'keywordText_new': item['keywordText'],
-                'user': user
+                'user': user,
+                'click': item['click'],
+                'cpc': item['cpc'],
+                'acos': item['acos']
+            })
+            res.append({
+                'campaignId': item['campaignId'],
+                'keywordText': item['keywordText'],
+                'matchType': item['matchType'],
+                'state': targeting_state
             })
         # 批量插入到数据库
         await dbNewTools.batch_add_sp_adGroup_negativeKeyword(updates)
+        return res
 
     async def delete_adGroup_negative_keyword(self, adGroupNegativeKeywordId, user='test'):
         info = self.to_iterable(adGroupNegativeKeywordId)
@@ -326,19 +336,144 @@ class GenSP(ToolsSP):
                 targeting_state = "failed"
                 target_id = None  # 或者设置为其他默认值
 
-            for item in info:
-                updates.append({
-                    'market': self.market,
-                    'keyword_state': "ARCHIVED",
-                    'keywordText': "Negative",
-                    'campaignNegativeKeywordId': item,
-                    'operation': "DELETE",
-                    'operation_state': targeting_state,
-                    'update_time': datetime.now(),
-                    'user': user
-                })
-                # 批量插入到数据库
+            updates.append({
+                'market': self.market,
+                'keyword_state': "ARCHIVED",
+                'keywordText': "Negative",
+                'campaignNegativeKeywordId': item,
+                'operation': "DELETE",
+                'operation_state': targeting_state,
+                'update_time': datetime.now(),
+                'user': user
+            })
+            # 批量插入到数据库
         await dbNewTools.batch_update_sp_adGroup_negativeKeyword(updates)
+
+    async def delete_keyword_toadGroup_batch(self,keywordId, user='test'):
+        info = self.to_iterable(keywordId)
+        # 修改广告组关键词信息
+        keyword_info = {
+          "keywordIdFilter": {
+            "include": []
+          }
+        }
+        for item in info:
+            keyword_info["keywordIdFilter"]["include"].append(str(item))
+        # 修改关键词操作
+        res = await self.delete_spkeyword_api(keyword_info)
+
+        dbNewTools = DbNewSpTools(self.db, self.brand,self.market)
+        await dbNewTools.init()
+        # 获取成功的 index
+        success_indices = {item['index']: item['keywordId'] for item in res['keywords']['success']}
+        print(success_indices)
+        updates = []
+        for idx, item in enumerate(info):
+            # 检查当前的索引是否在成功的索引中
+            if idx in success_indices:
+                targeting_state = "success"
+                target_id = success_indices[idx]
+            else:
+                targeting_state = "failed"
+                target_id = None  # 或者设置为其他默认值
+
+            updates.append({
+                'market': self.market,
+                'keywordId': item,
+                'state': 'ARCHIVED',
+                'bid_old': None,  # Assuming you have this value in `info`
+                'bid_new': None,
+                'operation_state': targeting_state,
+                'create_time': datetime.now(),
+                'user': user
+            })
+        # 批量插入到数据库
+        await dbNewTools.batch_update_sp_keywords(updates)
+
+    async def delete_adGroup_Targeting(self,targetId,user='test'):
+        info = self.to_iterable(targetId)
+        adGroup_info = {
+          "targetIdFilter": {
+            "include": []
+          }
+        }
+        for item in info:
+            adGroup_info["targetIdFilter"]["include"].append(str(item))
+        # api更新
+        res = await self.delete_targeting_api(adGroup_info)
+        # 存储更新记录到数据库
+        dbNewTools = DbNewSpTools(self.db, self.brand, self.market)
+        await dbNewTools.init()
+        # 获取成功的 index
+        success_indices = {item['index']: item['targetId'] for item in res['targetingClauses']['success']}
+        print(success_indices)
+        updates = []
+        for idx, item in enumerate(info):
+            # 检查当前的索引是否在成功的索引中
+            if idx in success_indices:
+                targeting_state = "success"
+                target_id = success_indices[idx]
+            else:
+                targeting_state = "failed"
+                target_id = None  # 或者设置为其他默认值
+
+            updates.append({
+                'market': self.market,
+                'adGroupId': None,
+                'bid_old': None,
+                'state': "ARCHIVED",
+                'expression': item,  # Assuming you have this value in `info`
+                'targetingType': 'SP',
+                'targetingState': targeting_state,
+                'update_time': datetime.now(),
+                'user': user,
+                'bid_new': None
+            })
+        # 批量插入到数据库
+        await dbNewTools.batch_update_adGroup_Targeting(updates)
+
+    async def delete_sku_batch(self,adId,user='test'):
+        info = self.to_iterable(adId)
+        adGroup_info = {
+          "adIdFilter": {
+            "include": []
+          }
+        }
+        for item in info:
+            adGroup_info["adIdFilter"]["include"].append(str(item))
+        # api更新
+        res = await self.delete_sku_api(adGroup_info)
+        # 存储更新记录到数据库
+        dbNewTools = DbNewSpTools(self.db, self.brand, self.market)
+        await dbNewTools.init()
+        # 获取成功的 index
+        success_indices = {item['index']: item['adId'] for item in res['productAds']['success']}
+        print(success_indices)
+        updates = []
+        for idx, item in enumerate(info):
+            # 检查当前的索引是否在成功的索引中
+            if idx in success_indices:
+                targeting_state = "success"
+                target_id = success_indices[idx]
+            else:
+                targeting_state = "failed"
+                target_id = None  # 或者设置为其他默认值
+
+            updates.append({
+                'market': self.market,
+                'adId': item,
+                'state_new': "ARCHIVED",
+                'status': targeting_state,
+                'update_time': datetime.now(),  # Assuming you have this value in `info`
+                'user': user,
+                'campaignId': None,
+                'campaignName': None,
+                'click': None,
+                'cpc': None,
+                'acos': None
+            })
+        # 批量插入到数据库
+        await dbNewTools.batch_update_sp_product(updates)
 
     async def update_adGroup_TargetingClause(self,target_id,bid,state, user='test'):
         adGroup_info = {
@@ -554,6 +689,7 @@ class GenSP(ToolsSP):
         success_indices = {item['index']: item['targetId'] for item in res['negativeTargetingClauses']['success']}
         print(success_indices)
         updates = []
+        res = []
         for idx, item in enumerate(info):
             # 检查当前的索引是否在成功的索引中
             if idx in success_indices:
@@ -575,10 +711,22 @@ class GenSP(ToolsSP):
                 'update_time': datetime.now(),
                 'user': user,
                 'targetId': target_id,
+                'campaignId': item['campaignId'],
+                'campaignName': item['campaignName'],
+                'click': item['click'],
+                'cpc': item['cpc'],
+                'acos': item['acos']
+            })
+            res.append({
+                'campaignId': item['campaignId'],
+                'keywordText': item['asin'],
+                'matchType': "ASIN_SAME_AS",
+                'state': targeting_state
             })
 
         # 批量插入到数据库
         await dbNewTools.batch_add_sd_adGroup_Targeting(updates)
+        return res
 
     async def delete_adGroup_Negative_Targeting(self,targetId,user='test'):
         info = self.to_iterable(targetId)
@@ -607,19 +755,18 @@ class GenSP(ToolsSP):
                 targeting_state = "failed"
                 target_id = None  # 或者设置为其他默认值
 
-            for item in info:
-                updates.append({
-                    'market': self.market,
-                    'adGroupId': "Negative",
-                    'bid_old': None,
-                    'state': "ARCHIVED",
-                    'expression': item,  # Assuming you have this value in `info`
-                    'targetingType': 'SP',
-                    'targetingState': targeting_state,
-                    'update_time': datetime.now(),
-                    'user': user,
-                    'bid_new': None
-                })
+            updates.append({
+                'market': self.market,
+                'adGroupId': "Negative",
+                'bid_old': None,
+                'state': "ARCHIVED",
+                'expression': item,  # Assuming you have this value in `info`
+                'targetingType': 'SP',
+                'targetingState': targeting_state,
+                'update_time': datetime.now(),
+                'user': user,
+                'bid_new': None
+            })
         # 批量插入到数据库
         await dbNewTools.batch_update_adGroup_Targeting(updates)
 
@@ -652,7 +799,55 @@ class GenSP(ToolsSP):
         await dbNewTools.create_sp_product(self.market,campaignId,asin,sku,adGroupId,adId,status,datetime.now(),"SP",user)
         return adId, error_message
 
-    async def update_product(self,adId,state, user='test'):
+    async def create_productsku_batch(self,info,user='test'):
+        product_info = {
+          "productAds": []
+        }
+        for item in info:
+            product_info["productAds"].append({
+              "campaignId": str(item['campaignId']),
+              "state": "ENABLED",
+              "adGroupId": str(item['adGroupId']),
+              "sku": item['sku']
+            })
+        # 执行新增品 返回adId
+        res = await self.create_product_api(product_info)
+        success_indices = {item['index']: item['adId'] for item in res['productAds']['success']}
+        updates = []
+        res = []
+        # 如果执行成功或者失败 记录到log表记录
+        dbNewTools = DbNewSpTools(self.db, self.brand,self.market)
+        await dbNewTools.init()
+        for idx, item in enumerate(info):
+            # 检查当前的索引是否在成功的索引中
+            if idx in success_indices:
+                targeting_state = "success"
+                adId = success_indices[idx]
+            else:
+                targeting_state = "failed"
+                adId = None  # 或者设置为其他默认值
+            updates.append({
+                'market': self.market,
+                'campaignId': item['campaignId'],
+                'asin': None,
+                'sku': item['sku'],
+                'adGroupId': item['adGroupId'],
+                'adId': adId,
+                'status': targeting_state,
+                'update_time': datetime.now(),
+                'productType': "SP",
+                'user': user
+            })
+            res.append({
+                'sku': item['sku'],
+                'adId': adId,
+                'state': targeting_state,
+            })
+        # 批量插入到数据库
+        await dbNewTools.batch_create_sp_product(updates)
+        return res
+
+    async def update_product(self,adId,state, user='test',campaignId=None,campaignName=None,click=None,cpc=None,acos=None):
         product_info = {
             "productAds": [
                 {
@@ -674,8 +869,57 @@ class GenSP(ToolsSP):
         # 如果执行成功或者失败 记录到log表记录
         dbNewTools = DbNewSpTools(self.db, self.brand,self.market)
         await dbNewTools.init()
-        await dbNewTools.update_sp_product(self.market, adId, state, status, datetime.now(), user)
+        await dbNewTools.update_sp_product(self.market, adId, state, status, datetime.now(), user,campaignId,campaignName,click,cpc,acos)
         return error_message
+
+
+    async def update_product_batch(self,info, user='test'):
+        product_info = {
+            "productAds": []
+        }
+        for item in info:
+            product_info["productAds"].append({
+                    "adId": str(item['adId']),
+                    "state": str(item['statu'])
+            })
+        # 执行新增品 返回adId
+        res = await self.update_product_api(product_info)
+        success_indices = {item['index']: item['adId'] for item in res['productAds']['success']}
+        updates = []
+        res = []
+        # 如果执行成功或者失败 记录到log表记录
+        dbNewTools = DbNewSpTools(self.db, self.brand, self.market)
+        await dbNewTools.init()
+        for idx, item in enumerate(info):
+            # 检查当前的索引是否在成功的索引中
+            if idx in success_indices:
+                targeting_state = "success"
+                adId = success_indices[idx]
+            else:
+                targeting_state = "failed"
+                adId = None  # 或者设置为其他默认值
+            updates.append({
+                'market': self.market,
+                'adId': str(item['adId']),
+                'state_new': str(item['statu']),
+                'status': targeting_state,
+                'update_time': datetime.now(),  # Assuming you have this value in `info`
+                'user': user,
+                'campaignId': item['campaignId'],
+                'campaignName': item['campaignName'],
+                'click': item['click'],
+                'cpc': item['cpc'],
+                'acos': item['acos']
+            })
+            # 批量插入到数据库
+            res.append({
+                'sku': item['sku'],
+                'adId': adId,
+                'state':  str(item['statu']),
+                'status': targeting_state,
+            })
+        await dbNewTools.batch_update_sp_product(updates)
+        return res
 
     async def add_keyword_toadGroup_v0(self,campaignId,adGroupId,keywordText,matchType,state,bid, user='test'):
         # 翻译完成进行添加
@@ -779,6 +1023,131 @@ class GenSP(ToolsSP):
         # 批量插入到数据库
         await dbNewTools.batch_update_sp_keywords(updates)
 
+    async def add_keyword_toadGroup_batch(self,info, user='test'):
+        # 翻译完成进行添加
+        keyword_info = {
+          "keywords": []
+        }
+        for item in info:
+            keyword_info["keywords"].append({
+              "campaignId": str(item['campaignId']),
+              "matchType": item['matchType'],
+              "state": "ENABLED",
+              "bid": float(item['bid']),
+              "adGroupId": str(item['adGroupId']),
+              "keywordText": item['keywordText']
+            })
+        # 新增关键词操作
+        res = await self.create_spkeyword_api(keyword_info)
+        print(res)
+        # 存储更新记录到数据库
+        dbNewTools = DbNewSpTools(self.db, self.brand, self.market)
+        await dbNewTools.init()
+        # 获取成功的 index
+        success_indices = {item['index']: item['keywordId'] for item in res['keywords']['success']}
+        print(success_indices)
+        updates = []
+        res = []
+        for idx, item in enumerate(info):
+            # 检查当前的索引是否在成功的索引中
+            if idx in success_indices:
+                targeting_state = "success"
+                keywordId = success_indices[idx]
+            else:
+                targeting_state = "failed"
+                keywordId = None  # 或者设置为其他默认值
+            print(targeting_state,keywordId)
+            updates.append({
+                'market': self.market,
+                'keywordId': keywordId,
+                'campaignId': item['campaignId'],
+                'matchType': item['matchType'],
+                'state': "ENABLED",
+                'bid': item['bid'],  # Assuming you have this value in `info`
+                'adGroupId': item['adGroupId'],
+                'keywordText': None,
+                'keywordText_new': item['keywordText'],
+                'operation_state': targeting_state,
+                'create_time': datetime.now(),
+                'user': user
+            })
+            res.append({
+                'keywordText': item['keywordText'],
+                'matchType': item['matchType'],
+                'bid': item['bid'],
+                'state': targeting_state,
+            })
+        # 批量插入到数据库
+        await dbNewTools.batch_add_sp_keyword_toadGroup(updates)
+        return res
+
+    async def create_adGroup_Targeting_by_asin_batch(self,info,user='test'):
+        adGroup_info = {
+          "targetingClauses": []
+        }
+        for item in info:
+            adGroup_info["targetingClauses"].append({
+                    "expression": [
+                        {
+                            "type": str(item['type']),
+                            "value": str(item['asin'])
+                        }
+                    ],
+                    "campaignId": str(item['campaignId']),
+                    "expressionType": "MANUAL",
+                    "state": "ENABLED",
+                    "bid": float(item['bid']),
+                    "adGroupId": str(item['adGroupId'])
+            })
+
+        # api更新
+        res = await self.create_adGroup_TargetingC(adGroup_info)
+        #结果写入日志
+        print(res)
+        # 存储更新记录到数据库
+        dbNewTools = DbNewSpTools(self.db, self.brand, self.market)
+        await dbNewTools.init()
+        # 获取成功的 index
+        success_indices = {item['index']: item['targetId'] for item in res['targetingClauses']['success']}
+        print(success_indices)
+        updates = []
+        res = []
+        for idx, item in enumerate(info):
+            # 检查当前的索引是否在成功的索引中
+            if idx in success_indices:
+                targeting_state = "success"
+                target_id = success_indices[idx]
+            else:
+                targeting_state = "failed"
+                target_id = None  # 或者设置为其他默认值
+
+            updates.append({
+                'market': self.market,
+                'adGroupId': item['adGroupId'],
+                'bid': item['bid'],
+                'expressionType': "MANUAL",
+                'state': "ENABLED",
+                'expression': f"{item['type']}={item['asin']}",  # Assuming you have this value in `info`
+                'targetingType': "SP",
+                'targetingState': targeting_state,
+                'update_time': datetime.now(),
+                'user': user,
+                'targetId': target_id,
+                'campaignId': item['campaignId'],
+                'campaignName': None,
+                'click': None,
+                'cpc': None,
+                'acos': None
+            })
+            res.append({
+                'keywordText': item['asin'],
+                'matchType': item['type'],
+                'bid': item['bid'],
+                'state': targeting_state,
+            })
+        # 批量插入到数据库
+        await dbNewTools.batch_add_sd_adGroup_Targeting(updates)
+        return res
 
 if __name__ == "__main__":
     #GenCampaign('amazon_ads','LAPASA','US').create_camapign('DeepBI_AUTO_test','2024-10-14',None,None,None,'AUTO','PAUSED','DAILY',10)

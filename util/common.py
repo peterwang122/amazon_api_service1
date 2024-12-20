@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 import traceback
@@ -8,11 +9,13 @@ from datetime import datetime, timedelta
 from db.tools_db_sp import DbSpTools
 from util.InserOnlineData import ProcessShowData
 from configuration.path import get_config_path
+from util.automatic_configuration import automatic_configuration
 
 
-def get_profile_id_info(db, market, brand):
+async def get_profile_id_info(db, market, brand):
     try:
-        profileId,region = DbSpTools(db,brand,market).get_profileId(market)
+        api =  DbSpTools(db,brand,market)
+        profileId, region = await api.get_profileId(market)
         print(profileId)
         return profileId,region
     except Exception as e:
@@ -53,28 +56,38 @@ def select_market(market,brand):
 #     return brand_info.get('default', {})
 
 
-def select_brand(db, sub_brand=None, country=None):
-    # 从 YAML 文件加载数据库信息
-    Brand_path = os.path.join(get_config_path(), 'Brand.yml')
-    with open(Brand_path, 'r') as file:
-        Brand_data = yaml.safe_load(file)
+def select_brand(db, sub_brand=None, country=None, retries=3):
+    try:
+        # 从 YAML 文件加载数据库信息
+        Brand_path = os.path.join(get_config_path(), 'Brand.yml')
+        with open(Brand_path, 'r') as file:
+            Brand_data = yaml.safe_load(file)
 
-    # 获取品牌信息
-    brand_info = Brand_data.get(db, {})
+        # 获取品牌信息
+        brand_info = Brand_data.get(db, {})
 
-    # 如果指定了子品牌，则进一步获取该子品牌的信息
-    if sub_brand:
-        sub_brand_info = brand_info.get(sub_brand, {})
-        if country and country in sub_brand_info:
-            return sub_brand_info[country]
-        return sub_brand_info.get('default', {})
+        # 如果指定了子品牌，则进一步获取该子品牌的信息
+        if sub_brand:
+            sub_brand_info = brand_info.get(sub_brand, {})
+            if country and country in sub_brand_info:
+                return sub_brand_info[country]
+            return sub_brand_info.get('default', {})
 
-    # 处理没有子品牌的情况
-    if country and country in brand_info:
-        return brand_info[country]
+        # 处理没有子品牌的情况
+        if country and country in brand_info:
+            return brand_info[country]
 
-    return brand_info.get('default', {})
-
+        return brand_info.get('default', {})
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        if retries > 0:
+            # 调用自动配置方法
+            automatic_configuration()
+            # 重新执行 select_brand 方法，重试次数减一
+            return select_brand(db, sub_brand, country, retries - 1)
+        else:
+            print("Max retries reached. Returning default.")
+            return None
 
 def new_get_api_config(brand_config, region, api_type, is_new=False):
     try:
@@ -189,7 +202,7 @@ def get_ad_my_credentials(db, market, brand):
     brand_config = select_brand(db, brand, market)
     # print(brand_config)
     if 'public' in brand_config and brand_config['public'] == 1:
-        profileid,region = get_profile_id_info(db,market, brand)
+        profileid,region = asyncio.run(get_profile_id_info(db,market, brand))
         api_config = new_get_api_config(brand_config, region, "AD")
         if not api_config:
             print(f"No API config found for region: {market}")

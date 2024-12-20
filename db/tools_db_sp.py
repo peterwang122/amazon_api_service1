@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime
-
+import aiomysql
 import pandas as pd
 import pymysql
 from configuration.path import get_config_path
@@ -22,23 +22,205 @@ class DbSpTools(BaseDb):
     def __init__(self, db, brand, market):
         super().__init__(db, brand, market)
 
-    def get_profileId(self, market):
-        # 低于 平均ACOS值 30% 以上的  campaign 广告活动
+    async def get_profileId(self, market):
+        # 低于 平均ACOS值 30% 以上的 campaign 广告活动
         # 建议执行的操作：预算提升30%
         try:
+            # 确保数据库连接已初始化
+            if self.conn is None:
+                await self.init()  # 初始化连接
             conn = self.conn
-
-            # 暂时忽略了market转化 US
+            # 使用异步游标执行 SQL 查询
             query = f"""
-SELECT DISTINCT profileId,region FROM amazon_profile
+SELECT DISTINCT profileId, region FROM amazon_profile
 WHERE countryCode = '{market}'
-             """
-            df = pd.read_sql(query, con=conn)
-            print("get_profileId Data successfully!")
-            return df.loc[0, 'profileId'], df.loc[0, 'region']
-
+            """
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute(query)
+                result = await cursor.fetchall()
+            if result:
+                df = pd.DataFrame(result)
+                print("get_profileId Data successfully!")
+                return df.loc[0, 'profileId'], df.loc[0, 'region']
+            else:
+                return None, None  # 如果没有结果返回空
         except Exception as error:
-            print("get_profileId Error while query data:", error)
+            print("get_profileId Error while querying data:", error)
+            return None, None
+
+    async def get_classification_id(self, market):
+        # 低于 平均ACOS值 30% 以上的 campaign 广告活动
+        # 建议执行的操作：预算提升30%
+        try:
+            # 确保数据库连接已初始化
+            if self.conn is None:
+                await self.init()  # 初始化连接
+            conn = self.conn
+            # 使用异步游标执行 SQL 查询
+            query = f"""
+WITH A AS (
+    SELECT
+        CASE
+            WHEN info_ext.parent_asins = ""
+                OR info_ext.parent_asins IS NULL THEN info_ext.asin
+            ELSE info_ext.parent_asins
+        END AS parent_asins,
+        info_ext.classification_rank_classification_id,
+        info_ext.classification_rank_title,
+        product_sp.campaignId AS campaignId,
+        b.campaign_name AS campaignName,
+        product_sp.adGroupId AS adGroupId,
+        product_sp.market AS market
+    FROM
+        amazon_sp_productads_list AS product_sp
+        LEFT JOIN amazon_product_info_extended AS info_ext
+            ON info_ext.asin = product_sp.asin
+            AND info_ext.market = product_sp.market
+        LEFT JOIN amazon_campaigns_list_sp b
+            ON b.campaignId = product_sp.campaignId
+        LEFT JOIN amazon_adgroups_list_sp c
+            ON c.adgroupId = product_sp.adGroupId
+    WHERE
+        info_ext.market = '{market}'
+        AND product_sp.market = '{market}'
+        AND b.state = 'ENABLED'
+        AND product_sp.state IN ('ENABLED', 'PAUSED')
+        AND c.state = 'ENABLED'
+        AND b.campaign_name LIKE '%DeepBI%'
+        AND b.campaign_name LIKE '%0514%'
+        AND classification_rank_classification_id IS NOT NULL
+        AND classification_rank_classification_id != ''
+    GROUP BY
+        parent_asins,
+        product_sp.campaignId
+    ORDER BY
+        parent_asins
+)
+SELECT DISTINCT classification_rank_classification_id FROM A
+            """
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute(query)
+                result = await cursor.fetchall()
+            if result:
+                df = pd.DataFrame(result)
+                print("get_profileId Data successfully!")
+                return df['classification_rank_classification_id'].tolist()
+            else:
+                return None
+        except Exception as error:
+            print("get_profileId Error while querying data:", error)
+            return None
+
+    async def get_classification_title(self, market):
+        # 低于 平均ACOS值 30% 以上的 campaign 广告活动
+        # 建议执行的操作：预算提升30%
+        try:
+            # 确保数据库连接已初始化
+            if self.conn is None:
+                await self.init()  # 初始化连接
+            conn = self.conn
+            # 使用异步游标执行 SQL 查询
+            query = f"""
+    SELECT
+        CASE
+            WHEN info_ext.parent_asins = ""
+                OR info_ext.parent_asins IS NULL THEN info_ext.asin
+            ELSE info_ext.parent_asins
+        END AS parent_asins,
+        info_ext.classification_rank_classification_id,
+        info_ext.classification_rank_title,
+        product_sp.campaignId AS campaignId,
+        b.campaign_name AS campaignName,
+        product_sp.adGroupId AS adGroupId,
+        product_sp.market AS market
+    FROM
+        amazon_sp_productads_list AS product_sp
+        LEFT JOIN amazon_product_info_extended AS info_ext
+            ON info_ext.asin = product_sp.asin
+            AND info_ext.market = product_sp.market
+        LEFT JOIN amazon_campaigns_list_sp b
+            ON b.campaignId = product_sp.campaignId
+        LEFT JOIN amazon_adgroups_list_sp c
+            ON c.adgroupId = product_sp.adGroupId
+    WHERE
+        info_ext.market = '{market}'
+        AND product_sp.market = '{market}'
+        AND b.state = 'ENABLED'
+        AND product_sp.state IN ('ENABLED', 'PAUSED')
+        AND c.state = 'ENABLED'
+        AND b.campaign_name LIKE '%DeepBI%'
+        AND b.campaign_name LIKE '%0514%'
+#         AND classification_rank_classification_id IS NOT NULL
+#         AND classification_rank_classification_id != ''
+    GROUP BY
+        parent_asins,
+        product_sp.campaignId
+    ORDER BY
+        parent_asins
+            """
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute(query)
+                result = await cursor.fetchall()
+            if result:
+                df = pd.DataFrame(result)
+                print("get_profileId Data successfully!")
+                return df
+            else:
+                return None
+        except Exception as error:
+            print("get_profileId Error while querying data:", error)
+            return None
+
+    async def get_serachterm(self, market,parent_asin,day,order):
+        # 低于 平均ACOS值 30% 以上的 campaign 广告活动
+        # 建议执行的操作：预算提升30%
+        try:
+            # 确保数据库连接已初始化
+            if self.conn is None:
+                await self.init()  # 初始化连接
+            conn = self.conn
+            # 使用异步游标执行 SQL 查询
+            query = f"""
+WITH a AS (
+	SELECT DISTINCT adGroupId 
+	FROM 
+	amazon_product_info_extended a 
+	LEFT JOIN 
+	amazon_sp_productads_list b ON a.asin = b.asin AND a.market = b.market
+	WHERE 
+	parent_asins = '{parent_asin}'
+	),
+	b AS (
+    SELECT
+        b.searchTerm,
+        SUM(CASE WHEN date BETWEEN DATE_SUB(CURRENT_DATE , INTERVAL {int(day)} day) AND DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY) THEN purchases7d ELSE 0 END) AS ORDER_1m
+    FROM
+        amazon_search_term_reports_sp b
+    JOIN
+        a ON b.adGroupId = a.adGroupId
+    WHERE
+        b.date BETWEEN DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY) AND CURRENT_DATE - INTERVAL 1 DAY
+        AND b.market = '{market}'
+        AND NOT (b.searchTerm LIKE 'b0%' AND LENGTH(b.searchTerm) = 10) -- 添加排除条件
+    GROUP BY
+        b.searchTerm
+)
+SELECT DISTINCT searchTerm FROM b
+WHERE 
+ b.ORDER_1m >= {int(order)}
+            """
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute(query)
+                result = await cursor.fetchall()
+            if result:
+                df = pd.DataFrame(result)
+                print("get_profileId Data successfully!")
+                return df['searchTerm'].tolist()
+            else:
+                return []
+        except Exception as error:
+            print("get_profileId Error while querying data:", error)
+            return []
 
     def select_sd_campaign_name(self,product):
         try:

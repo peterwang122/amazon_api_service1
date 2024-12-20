@@ -76,6 +76,12 @@ class ToolsSP(BaseApi):
                 ]
               }}))
 
+    async def list_adGroup_TargetingClause_by_targetId_batch(self, targetId):
+        return await self.make_request(sponsored_products.TargetsV3, "list_product_targets", body=json.dumps({
+              "targetIdFilter": {
+                "include": targetId
+              }}))
+
     async def list_adGroup_TargetingClause_by_campaignId(self, campaignId):
         return await self.make_request(sponsored_products.TargetsV3, "list_product_targets", body=json.dumps({
               "campaignIdFilter": {
@@ -106,6 +112,34 @@ class ToolsSP(BaseApi):
 
     async def list_category_refinements(self, categoryId):
         return await self.make_request(sponsored_products.TargetsV3, "list_products_targets_category_refinements", categoryId=categoryId)
+
+    async def list_Campaign_Negative_Keywords(self, campaignId,nextToken):
+        return await self.make_request(sponsored_products.CampaignNegativeKeywordsV3, "list_campaign_negative_keywords", body=json.dumps({
+              "campaignIdFilter": {
+                "include": [
+                  campaignId
+                ]
+              },
+                "stateFilter": {
+                "include": [
+                "ENABLED"
+                ]
+                },
+        "nextToken": nextToken}))
+
+    async def list_Campaign_Negative_Targeting(self, campaignId,nextToken):
+        return await self.make_request(sponsored_products.CampaignNegativeTargets, "list_campaign_negative_targets", body=json.dumps({
+              "campaignIdFilter": {
+                "include": [
+                  campaignId
+                ]
+              },
+                "stateFilter": {
+                "include": [
+                "ENABLED"
+                ]
+                },
+        "nextToken": nextToken}))
 
     async def list_category_bid_recommendations(self, categoryId,new_campaign_id,new_adgroup_id):
         return await self.make_request(sponsored_products.BidRecommendationsV3, "`get_bid_recommendations`", body=json.dumps({
@@ -189,6 +223,12 @@ class ToolsSP(BaseApi):
     async def delete_spkeyword_api(self, keyword_info):
         return await self.make_request(sponsored_products.KeywordsV3, "delete_keywords", body=json.dumps(keyword_info))
 
+    async def delete_targeting_api(self, keyword_info):
+        return await self.make_request(sponsored_products.TargetsV3, "delete_product_targets", body=json.dumps(keyword_info))
+
+    async def delete_sku_api(self, keyword_info):
+        return await self.make_request(sponsored_products.ProductAdsV3, "delete_product_ads", body=json.dumps(keyword_info))
+
     async def get_spkeyword_api(self, adGroupID):
         return await self.make_request(sponsored_products.KeywordsV3, "list_keywords", body=json.dumps({
             "adGroupIdFilter": {
@@ -213,6 +253,12 @@ class ToolsSP(BaseApi):
                 ]
             }}))
 
+    async def get_spkeyword_api_by_keywordId_batch(self, keywordId):
+        return await self.make_request(sponsored_products.KeywordsV3, "list_keywords", body=json.dumps({
+            "keywordIdFilter": {
+                "include":keywordId
+            }}))
+
     async def get_spkeyword_recommendations_api(self, campaignId, adGroupID):
         return await self.make_request(sponsored_products.RankedKeywordsRecommendations, "list_ranked_keywords_recommendations", body=json.dumps({
               "campaignId": str(campaignId),
@@ -224,6 +270,26 @@ class ToolsSP(BaseApi):
 
 
 if __name__ == "__main__":
-    campaign_tools = ToolsSP('amazon_outdoormaster_jp', 'OutdoorMaster', 'JP')
-    result = asyncio.run(campaign_tools.list_category())  # 正确的调用方式
+    campaign_tools = ToolsSP('amazon_ads', 'LAPASA', 'JP')
+    all_negative_keywords = []  # 用于存储所有的负关键词
+
+    # 初始请求
+    result = asyncio.run(campaign_tools.list_Campaign_Negative_Targeting("", None))
     print(result)
+
+    # 将初始结果添加到列表中
+    all_negative_keywords.extend(result["campaignNegativeTargetingClauses"])
+
+    # 循环请求直到 nextToken 为空
+    while result.get("nextToken"):
+        result = asyncio.run(campaign_tools.list_Campaign_Negative_Targeting(None, result["nextToken"]))
+        print(result)
+
+        # 添加新的负关键词到列表中
+        all_negative_keywords.extend(result["campaignNegativeTargetingClauses"])
+
+    # 将所有的负关键词存储到 JSON 文件
+    with open('JP-2.json', 'w', encoding='utf-8') as json_file:
+        json.dump(all_negative_keywords, json_file, ensure_ascii=False, indent=4)
+
+    print("All negative keywords have been saved to US.json")

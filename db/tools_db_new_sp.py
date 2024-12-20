@@ -12,6 +12,34 @@ class DbNewSpTools(BaseDb):
     def __init__(self, db, brand, market, log=True):
         super().__init__(db, brand, market, log)
 
+    async def batch_expanded_asin_info(self, updates):
+        try:
+            async with self.conn.cursor() as cursor:
+                for update in updates:
+                    # 查询是否已经存在相同的记录
+                    query_check = """
+                    SELECT COUNT(*) FROM expanded_asin_info 
+                    WHERE `classification_id` = %s AND `Asin` = %s AND `Date` = %s
+                    """
+                    await cursor.execute(query_check, (update['classification_id'], update['Asin'], update['Date']))
+                    result = await cursor.fetchone()
+
+                    # 如果不存在，则执行插入操作
+                    if result[0] == 0:
+                        query_insert = """
+                        INSERT INTO expanded_asin_info (`market`, `classification_id`, `Asin`, `Rank`, `Date`) 
+                        VALUES (%s, %s, %s, %s, %s)
+                        """
+                        await cursor.execute(query_insert, (
+                        update['market'], update['classification_id'], update['Asin'], update['Rank'], update['Date']))
+                await self.conn.commit()
+                print("Records inserted successfully into expanded_asin_info table")
+        except Exception as e:
+            print(f"Error occurred when inserting into expanded_asin_info: {e}")
+        finally:
+            # 确保连接关闭
+            await self.close_connection()
+
     async def update_sp_campaign(self,market,campaign_name,campaign_id,change_type,budget_old,budget_new,standards_acos,acos,beizhu,status,update_time,user='test'):
         try:
             query = "INSERT INTO amazon_campaign_update (market, campaign_name, campaign_id,change_type, old_value, new_value, standards_acos, acos, beizhu, status, update_time,user) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
@@ -38,7 +66,7 @@ class DbNewSpTools(BaseDb):
     # 新建广告组
     async def create_sp_adgroups(self,market,campaignId,adGroupName,adGroupId,state,defaultBid,beizhu,adGroupState,update_time,creativeType,adGroupType,user='test'):
         try:
-            query = "INSERT INTO amazon_adgroups_create (market,campaignId,adGroupName,adGroupId,state,defaultBid,beizhu,adGroupState,update_time,creativeType,adGroupType,user) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            query = "INSERT INTO amazon_adgroups_create (market,campaignId,adGroupName,adGroupId,state,defaultBid,beizhu,adGroupState,update_time,creativeType,adGroupType,user) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
             values = (market,campaignId,adGroupName,adGroupId,state,defaultBid,beizhu,adGroupState,update_time,creativeType,adGroupType,user)
             async with self.conn.cursor() as cursor:
                 await cursor.execute(query, values)
@@ -70,13 +98,43 @@ class DbNewSpTools(BaseDb):
         except Exception as e:
             print(f"Error occurred when into amazon_product_create: {e}")
 
-    # 对应修改品的记录log
-    async def update_sp_product(self, market, adId, state_new,status, update_time,user='test'):
+    async def batch_create_sp_product(self,updates):
         try:
-            query = "INSERT INTO amazon_product_update (market, adId, state_new, status, update_time,user) VALUES (%s, %s, %s, %s, %s, %s)"
-            values = (market, adId, state_new, status, update_time,user)
+            query = "INSERT INTO amazon_product_create (market, campaignId, asin, sku, adGroupId, adId,status, update_time,productType,user) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            async with self.conn.cursor() as cursor:
+                # 批量执行插入
+                await cursor.executemany(query, [
+                    (update['market'], update['campaignId'], update['asin'], update['sku'],
+                     update['adGroupId'], update['adId'], update['status'], update['update_time'],
+                     update['productType'], update['user']) for
+                    update in updates])
+            await self.conn.commit()
+            print("Record inserted successfully into amazon_product_create table")
+        except Exception as e:
+            print(f"Error occurred when into amazon_product_create: {e}")
+
+    # 对应修改品的记录log
+    async def update_sp_product(self, market, adId, state_new,status, update_time,user='test',campaignId=None,campaignName=None,click=None,cpc=None,acos=None):
+        try:
+            query = "INSERT INTO amazon_product_update (market, adId, state_new, status, update_time,user,campaignId,campaignName,click,cpc,acos) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            values = (market, adId, state_new, status, update_time,user,campaignId,campaignName,click,cpc,acos)
             async with self.conn.cursor() as cursor:
                 await cursor.execute(query, values)
+            await self.conn.commit()
+            print("Record inserted successfully into amazon_product_update table")
+        except Exception as e:
+            print(f"Error occurred when into amazon_product_update: {e}")
+
+    async def batch_update_sp_product(self, updates):
+        try:
+            query = "INSERT INTO amazon_product_update (market, adId, state_new, status, update_time,user,campaignId,campaignName,click,cpc,acos) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            async with self.conn.cursor() as cursor:
+                # 批量执行插入
+                await cursor.executemany(query, [
+                    (update['market'], update['adId'], update['state_new'], update['status'],
+                     update['update_time'], update['user'], update['campaignId'], update['campaignName'],
+                     update['click'], update['cpc'], update['acos']) for
+                    update in updates])
             await self.conn.commit()
             print("Record inserted successfully into amazon_product_update table")
         except Exception as e:
@@ -89,6 +147,21 @@ class DbNewSpTools(BaseDb):
             values = (market,keywordId,campaignId,matchType,state,bid,adGroupId,keywordText,keywordText_new,operation_state,create_time,user)
             async with self.conn.cursor() as cursor:
                 await cursor.execute(query, values)
+            await self.conn.commit()
+            print("Record inserted successfully into amazon_keyword_create table")
+        except Exception as e:
+            print(f"Error occurred when into amazon_keyword_create: {e}")
+
+    async def batch_add_sp_keyword_toadGroup(self,updates):
+        try:
+            query = "INSERT INTO amazon_keyword_create (market,keywordId,campaignId,matchType,state,bid,adGroupId,keywordText_old,keywordText_new,operation_state,create_time,user) VALUES (%s,%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            async with self.conn.cursor() as cursor:
+            # 批量执行插入
+                await cursor.executemany(query, [(update['market'], update['keywordId'], update['campaignId'], update['matchType'],
+                                            update['state'], update['bid'], update['adGroupId'], update['keywordText'], update['keywordText_new'],
+                                            update['operation_state'], update['create_time'], update['user']) for
+                                           update in updates])
+
             await self.conn.commit()
             print("Record inserted successfully into amazon_keyword_create table")
         except Exception as e:
@@ -175,11 +248,11 @@ class DbNewSpTools(BaseDb):
 
     async def batch_add_sp_adGroup_negativeKeyword(self, updates):
         try:
-            query = "INSERT INTO amazon_negative_keyword_create (market,adGroupName,adGroupId,campaignId,campaignName,matchType,keyword_state,keywordText,operation,operation_state,update_time,campaignNegativeKeywordId,keywordText_new,user) VALUES (%s, %s, %s, %s, %s,%s, %s,%s, 'addGroup_add', %s, %s, %s, %s, %s)"
+            query = "INSERT INTO amazon_negative_keyword_create (market,adGroupName,adGroupId,campaignId,campaignName,matchType,keyword_state,keywordText,operation,operation_state,update_time,campaignNegativeKeywordId,keywordText_new,user,click,cpc,acos) VALUES (%s, %s, %s, %s, %s,%s, %s,%s, 'addGroup_add', %s, %s, %s, %s, %s, %s, %s, %s)"
             async with self.conn.cursor() as cursor:
                 await cursor.executemany(query, [(update['market'], update['adGroupName'], update['adGroupId'], update['campaignId'],update['campaignName'],
                                         update['matchType'], update['keyword_state'], update['keywordText'],update['operation_state'],update['update_time'],
-                                        update['campaignNegativeKeywordId'],update['keywordText_new'],update['user'])
+                                        update['campaignNegativeKeywordId'],update['keywordText_new'],update['user'],update['click'],update['cpc'],update['acos'])
                                        for
                                        update in updates])
 
@@ -230,11 +303,11 @@ class DbNewSpTools(BaseDb):
 
     async def batch_add_sd_adGroup_Targeting(self,updates):
         try:
-            query = "INSERT INTO amazon_targeting_create (market,adGroupId,bid,expressionType,state,expression,targetingType,targetingState,update_time,user,targetId) VALUES (%s,%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            query = "INSERT INTO amazon_targeting_create (market,adGroupId,bid,expressionType,state,expression,targetingType,targetingState,update_time,user,targetId,campaignId,campaignName,click,cpc,acos) VALUES (%s,%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
             async with self.conn.cursor() as cursor:
                 await cursor.executemany(query, [(update['market'], update['adGroupId'], update['bid'], update['expressionType'],
                                         update['state'], update['expression'], update['targetingType'],update['targetingState'],update['update_time'],
-                                        update['user'],update['targetId'],) for
+                                        update['user'],update['targetId'],update['campaignId'],update['campaignName'],update['click'],update['cpc'],update['acos']) for
                                        update in updates])
 
             await self.conn.commit()
